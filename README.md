@@ -12,6 +12,7 @@ Steam and Twitch.
 |-----------|--------------------|----------------------------------|
 | Junbo Zhao  | jzz5658@psu.edu    | Scraping, tidying, plots         |
 | Seokyoung Kim  | smk7032@psu.edu    | Supplementary data, tables       |
+| JiXianLi  | jpl6859@psu.edu    | data analyze and organize       |
 |-----------|--------------------|----------------------------------|
 
 ## Repo layout
