@@ -24,13 +24,110 @@ execute:
   warning: false
 ---
 ```{r}
+#| label: setup
+#| include: false
+
 library(tidyverse)
-library(ggplot2)
 library(scales)
+library(knitr)
 ```
 
+```{r}
+#| label: data-load
+#| include: false
+
+esports <- read_csv("Esports_Stats.csv", show_col_types = FALSE) |>
+  rename(
+    prize_money                  = `Total Prize Money`,
+    total_tournaments            = `Total Tournaments`,
+    total_active_players         = `Total Active Players`,
+    mean_tournament_prize_pool   = `Mean Tournament Prize Pool`,
+    mean_earnings_per_player     = `Mean Earnings/Player`,
+    median_tournament_prize_pool = `Median Tournament Prize Pool`,
+    median_earnings_per_player   = `Median Earnings/Player`
+  )
+```
+
+\newpage
+
 # Introduction
-E-sports has evolved from a small group of enthusiasts' entertainment into a global industry over the past three decades. At the same time, the number of professional players, the frequency of the competition, and the number of players are continuously increasing, which leads to esports becoming a formal exercise. However, we still lack quantitative research on the long-term growth model of e-sports. For instance, over the past nearly three decades, how has the total prize money of e-sports changed over time? Are there significant differences in the distribution of individual player incomes between different years? And is there a clear correlation between the growth of active players and the total prize money of. In order to answer these questions, this report records the data of e-sports from 1998 to 2025, including total award money, total number of tournaments, mean and median tournament award pool, and mean and median earnings per player. events? This report's analysis part mainly includes three parts: the trend of the award pool of the tournaments over the years, the difference between the mean and the median, and the relationship between the number of players and the award pool of the tournament.
+Esports has gone from a few hobbyists at arcade machines in the late 1990s to one of the largest entertainment categories in the world. Total prize money is now in the hundreds of millions of dollars per year, and tens of thousands of players compete in tracked events every season. Even with that scale, there is not much long-form quantitative work that follows the whole arc of the industry from its earliest years.
+
+This report uses public data from esportsearnings.com covering 1998 to 2025. The dataset has 28 rows (one per year) and eight columns: total prize money, total tournament count, total active players, plus the mean and median of both the per-tournament prize pool and per-player earnings. We picked three questions to dig into:
+
+1. How have total prize money and tournament volume moved over time, and do they grow together?
+2. How big is the gap between mean and median earnings, and what does that gap say about who actually makes money in the scene?
+3. Is there a clean relationship between the number of active players and the total prize money each year?
+
+The three analysis sections answer one question each. The Summary at the end ties them together and looks at what changed after 2022.
+
+\newpage
+
+# Data Description
+
+The data comes from esportsearnings.com, a community-maintained tracker that has been logging tournament results since the early 2000s. We pulled the year-level totals into one CSV (`Esports_Stats.csv`) covering 1998 through 2025, with one row per year. All dollar amounts are nominal USD, so part of the long-term growth is just inflation.
+
+@tbl-vars lists the eight columns and what they mean.
+
+```{r}
+#| label: tbl-vars
+#| tbl-cap: "Variables in Esports_Stats.csv (1998-2025, 28 rows)."
+
+tibble(
+  Variable = c("year", "prize_money", "total_tournaments",
+               "total_active_players",
+               "mean_tournament_prize_pool",
+               "median_tournament_prize_pool",
+               "mean_earnings_per_player",
+               "median_earnings_per_player"),
+  Type = c("integer", "numeric (USD)", "integer", "integer",
+           "numeric (USD)", "numeric (USD)",
+           "numeric (USD)", "numeric (USD)"),
+  Description = c(
+    "Calendar year of the observation",
+    "Sum of prize money awarded across all tracked tournaments that year",
+    "Number of tracked tournaments held that year",
+    "Players with at least one tracked tournament result that year",
+    "Average prize pool across all tournaments that year",
+    "Middle prize pool when tournaments are sorted by size",
+    "Average winnings per active player that year",
+    "Middle player's winnings when players are sorted by total earnings"
+  )
+) |>
+  knitr::kable()
+```
+
+To make the rest of the report easier to follow, we grouped the 28 years into four eras using visible breakpoints in the data. The cutoffs are not arbitrary: total tournament count crossed 1,000 around 2010, hit roughly 6,000 around 2019, and dropped sharply after 2022. @tbl-era-summary summarizes each era.
+
+```{r}
+#| label: tbl-era-summary
+#| tbl-cap: "Esports industry by era. Total prize money is summed within each era; the other columns are within-era averages."
+
+esports |>
+  mutate(era = case_when(
+    year <= 2009 ~ "1. Early adoption (1998-2009)",
+    year <= 2018 ~ "2. Rapid growth (2010-2018)",
+    year <= 2022 ~ "3. Peak (2019-2022)",
+    TRUE         ~ "4. Contraction (2023-2025)"
+  )) |>
+  group_by(era) |>
+  summarize(
+    total_prize_usd = round(sum(prize_money)),
+    avg_tournaments = round(mean(total_tournaments)),
+    avg_players     = round(mean(total_active_players)),
+    avg_mm_ratio    = round(mean(mean_tournament_prize_pool /
+                                 median_tournament_prize_pool), 1),
+    .groups = "drop"
+  ) |>
+  knitr::kable(
+    col.names = c("Era", "Total prize money (USD)",
+                  "Avg tournaments / yr", "Avg active players / yr",
+                  "Mean / median ratio"),
+    format.args = list(big.mark = ",")
+  )
+```
+
+A few patterns are already visible from the table. The Rapid Growth era held more than ten times the tournaments per year that Early Adoption did, and the Peak era added another 75% on top of that. The mean-to-median ratio sat above 20 across both Rapid Growth and Peak, meaning a handful of mega-events were sitting on top of hundreds of much smaller ones. After 2022 that ratio collapsed into the single digits, but as Section 2.2 will show, the collapse was not because the small events finally caught up. It was because the small events stopped happening. The three analysis sections that follow walk through each piece of this picture in detail.
 
 \newpage
 
@@ -39,18 +136,15 @@ E-sports has evolved from a small group of enthusiasts' entertainment into a glo
 ```{r}
 #| label: fig-PrizeMoney-Tournaments
 #| fig-cap: "Annual esports prize money (bars, left axis) and total tournaments held (line, right axis) from 1998 to 2025. Prize money values have been scaled to millions of USD for readability."
-df <- read_csv("Esports_Stats.csv") |>
-  rename(
-    year              = year,
-    prize_money       = `Total Prize Money`,
-    total_tournaments = `Total Tournaments`
-  ) |>
+#| fig-alt: "Bar and line chart of total esports prize money and tournament count from 1998 to 2025. Both rise together until 2019, after which the tournament count drops sharply while prize money stays elevated through 2021, then falls."
+
+df <- esports |>
   select(year, prize_money, total_tournaments)
 
 scale_factor <- max(df$prize_money) / max(df$total_tournaments)
 
-col_prize  <- "blue"   # blue  — prize money
-col_tourn  <- "orange"   # orange — tournament
+col_prize <- "#1f77b4"   # prize money
+col_tourn <- "#ff7f0e"   # tournament count
 
 p <- ggplot(df, aes(x = year)) +
 
@@ -110,6 +204,7 @@ Since 2022, both metrics have trended downward, with 2025 data showing the lowes
 
 A key insight from this graph is that **prize money and tournament volume do not always move at exactly the same rate**. For example, tournament counts remain high for several years even when prize money fluctuates more strongly. That suggests the esports ecosystem can stay active even when the money side changes, and it may also show that some years had fewer or more concentrated high-prize events.
 
+What this chart cannot tell us is whether the prize money was spread evenly across events or piled up in a few mega-tournaments. Section 2.2 takes a crack at exactly that question by comparing the mean and the median.
 
 \newpage
 
@@ -117,27 +212,24 @@ A key insight from this graph is that **prize money and tournament volume do not
 ```{r}
 #| label: fig-MeanVsMedian
 #| fig-cap: "Mean and median over time, on a log scale. Left: prize pool per tournament. Right: earnings per active player."
+#| fig-alt: "Two-panel line chart on a log scale. The left panel plots the mean and median tournament prize pool by year; the right panel plots the mean and median earnings per player. The mean stays well above the median in both panels until around 2022, after which the two lines converge."
 #| fig-pos: H
 #| fig-width: 9
 #| fig-height: 4.2
 
-dataTable <- read.csv("Esports_Stats.csv", check.names = FALSE)
-
-mvmLong <- dataTable |>
+mvm_long <- esports |>
   select(year,
-         `Mean Tournament Prize Pool`,
-         `Median Tournament Prize Pool`,
-         `Mean Earnings/Player`,
-         `Median Earnings/Player`) |>
+         mean_tournament_prize_pool, median_tournament_prize_pool,
+         mean_earnings_per_player, median_earnings_per_player) |>
   pivot_longer(-year, names_to = "metric", values_to = "value") |>
   mutate(
-    panel  = ifelse(grepl("Tournament", metric),
+    panel = if_else(str_detect(metric, "tournament"),
                     "Per tournament prize pool",
                     "Per player earnings"),
-    centerType = ifelse(grepl("^Mean", metric), "Mean", "Median")
+    center_type = if_else(str_detect(metric, "^mean"), "Mean", "Median")
   )
 
-ggplot(mvmLong, aes(x = year, y = value, color = centerType)) +
+ggplot(mvm_long, aes(x = year, y = value, color = center_type)) +
   geom_line(linewidth = 0.8) +
   geom_point(size = 1.6) +
   facet_wrap(~ panel, scales = "free_y") +
@@ -155,23 +247,22 @@ ggplot(mvmLong, aes(x = year, y = value, color = centerType)) +
 ```{r}
 #| label: fig-MMratio
 #| fig-cap: "Ratio of mean to median over time. A value of 1 (dashed line) would mean a perfectly balanced distribution; everything above it is right-skew."
+#| fig-alt: "Line chart showing the ratio of mean to median for tournament prize pools and per-player earnings. The tournament line peaks above 30 in the late 2010s and crashes to about 3 by 2025. The player-earnings line stays between 3 and 15 throughout."
 #| fig-pos: H
 #| fig-width: 9
 #| fig-height: 3.5
 
-dataTable <- read.csv("Esports_Stats.csv", check.names = FALSE)
-
-ratioLong <- dataTable |>
+ratio_long <- esports |>
   transmute(
     year,
     `Tournament prize pool` =
-      `Mean Tournament Prize Pool` / `Median Tournament Prize Pool`,
+      mean_tournament_prize_pool / median_tournament_prize_pool,
     `Per-player earnings`   =
-      `Mean Earnings/Player`     / `Median Earnings/Player`
+      mean_earnings_per_player / median_earnings_per_player
   ) |>
   pivot_longer(-year, names_to = "metric", values_to = "ratio")
 
-ggplot(ratioLong, aes(x = year, y = ratio, color = metric)) +
+ggplot(ratio_long, aes(x = year, y = ratio, color = metric)) +
   geom_hline(yintercept = 1, linetype = "dashed", color = "grey60") +
   geom_line(linewidth = 0.8) +
   geom_point(size = 1.6) +
@@ -195,18 +286,20 @@ We wanted to compare the mean and median here because they pick up on different 
 
 What caught our attention was the shift after 2022. The median tournament prize pool went from roughly \$1,500 in 2021 up to over \$18,000 by 2025, and the mean-to-median ratio dropped from around 26 all the way to about 3. At first that looks like a good thing, like the money is spreading out more evenly. But when we checked the total number of tournaments, the count went from about 6,300 in 2019 down to around 1,700 in 2025. So what actually happened is a lot of the smaller grassroots events stopped running. The tournaments that are left tend to be bigger and better funded, which is why the median jumped up and closed the gap with the mean. It is less that the distribution got more equal and more that the bottom end just went away.
 
+So far we have looked at the totals (Section 2.1) and at how those totals were divided up within a year (Section 2.2). The last piece is the player side: when more people compete, does the pot grow with them?
+
 \newpage
 
 ## The Relationship Between The Number Of Players And The Award Pool Of The Tournament
 ```{r}
 #| label: fig-PlayersAndPrice
 #| fig-cap: "Relationship Between Total Players and Award Pool Of Tournament"
+#| fig-alt: "Line-and-point chart of total prize money against the number of active players, with each point representing one year. The path rises steeply, then loops back on itself in the early 2020s before dropping again."
 #| fig-pos: H
 #| fig-width: 9
 #| fig-height: 4.5
 
-dataTable <- read.csv("Esports_Stats.csv", check.names = FALSE)
-ggplot(dataTable, aes(x = `Total Active Players`, y = `Total Prize Money`)) +
+ggplot(esports, aes(x = total_active_players, y = prize_money)) +
   geom_line(color = "skyblue", linewidth = 1) +
   geom_point(color = "darkblue", size = 2) +
   scale_x_continuous(labels = comma) +
@@ -224,158 +317,76 @@ As the @fig-PlayersAndPrice shows, overall, there is a strong positive correlati
 \newpage
 
 # Summary
-Analysis of the graph narrative
+
+All three sections were aimed at the same bigger question: how did esports actually grow, and what is happening now that the growth has stopped. Read together, they tell one story.
+
+Section 2.1 showed that total prize money and tournament count rose roughly together until about 2019, when the tournament count peaked at around 6,300 and started falling. By 2025 the count was back down to about 1,700. Prize money stayed elevated through 2021 and only dropped sharply after 2022. The two lines stopped tracking each other.
+
+Section 2.2 zoomed into what that meant for a typical event. From 2010 to 2021 the mean tournament prize pool ran 12 to 29 times the median, which is a textbook right skew: a handful of mega-events sitting on top of hundreds of small ones. After 2022 the ratio collapsed to about 3, but the closing of that gap was not because the small events caught up. It was because the small events stopped happening.
+
+Section 2.3 showed that more active players generally meant more prize money, but the curve loops back on itself across 2020 and 2021, when player counts stayed high while in-person events could not run.
+
+@fig-yoy-growth puts the timing on a single chart. Both metrics drop hard in 2020, recover unevenly through 2021, then both turn negative from 2023 onward. The 2020 dip is short and tied to a single global event. The slower bleed after 2022 is harder to explain away, since it is not tied to a single shock and it shows up in both prize money and tournament count at the same time.
+
+```{r}
+#| label: fig-yoy-growth
+#| fig-cap: "Year-over-year percent change in total prize money and tournament count, 2000-2025. Values above the dashed line indicate growth from the previous year; values below indicate contraction."
+#| fig-alt: "Two lines showing the year-over-year percent change in prize money and tournament count from 2000 to 2025. Both drop sharply in 2020, recover unevenly in 2021, and turn negative again from 2023 onward."
+#| fig-pos: H
+#| fig-width: 9
+#| fig-height: 4
+
+esports |>
+  arrange(year) |>
+  mutate(
+    prize_yoy = (prize_money - lag(prize_money)) /
+                  lag(prize_money) * 100,
+    tourn_yoy = (total_tournaments - lag(total_tournaments)) /
+                  lag(total_tournaments) * 100
+  ) |>
+  filter(year >= 2000) |>
+  pivot_longer(c(prize_yoy, tourn_yoy),
+               names_to = "metric", values_to = "yoy_pct") |>
+  mutate(metric = recode(metric,
+                         prize_yoy = "Prize money",
+                         tourn_yoy = "Tournament count")) |>
+  ggplot(aes(x = year, y = yoy_pct, color = metric)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 2) +
+  scale_color_manual(values = c("Prize money"      = "#1f77b4",
+                                "Tournament count" = "#ff7f0e")) +
+  scale_y_continuous(labels = function(x) paste0(x, "%")) +
+  scale_x_continuous(breaks = seq(2000, 2025, by = 5)) +
+  labs(
+    title = "Year-over-year change in esports growth",
+    x = NULL, y = "Change vs. previous year", color = NULL
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "top")
+```
+\newpage
+## Limitations
+
+A few things this dataset cannot tell us. It does not split tournaments by game title, so Dota 2's The International gets averaged in with small Counter-Strike LANs. It only counts players who have at least one recorded prize, so casual or unsponsored competitors are invisible to us. The dollar figures are nominal, so part of the long-term growth is just inflation. The 2025 numbers are likely incomplete too, since esportsearnings.com keeps updating older years as results come in.
+
 
 \newpage
 
 # Code Appendix
+
+The chunk below auto-includes every code chunk from the body so we only have to maintain one copy of each plot or table.
+
 ```{r}
 #| label: code-appendix
+#| ref-label: !expr setdiff(knitr::all_labels(), c("setup", "code-appendix", "session-info"))
 #| echo: true
 #| eval: false
-
-library(tidyverse)
-library(ggplot2)
-library(scales)
-
-# Section 1: The Relationship between the Total Prize Pool and The Number of Tournaments
-# Author: Seokyoung Kim
-
-df <- read_csv("Esports_Stats.csv") |>
-  rename(
-    year              = year,
-    prize_money       = `Total Prize Money`,
-    total_tournaments = `Total Tournaments`
-  ) |>
-  select(year, prize_money, total_tournaments)
-
-scale_factor <- max(df$prize_money) / max(df$total_tournaments)
-
-col_prize  <- "blue"   # blue  — prize money
-col_tourn  <- "orange"   # orange — tournament
-
-p <- ggplot(df, aes(x = year)) +
-
-  geom_col(
-    aes(y = prize_money),
-    fill  = col_prize,
-    alpha = 0.85,
-    width = 0.7
-  ) +
-  geom_line(
-    aes(y = total_tournaments * scale_factor),
-    color     = col_tourn,
-    linewidth = 1.1
-  ) +
-  geom_point(
-    aes(y = total_tournaments * scale_factor),
-    color = col_tourn,
-    size  = 2.2,
-    shape = 21,
-    fill  = "white",
-    stroke = 1.2
-  ) +
-  
-  # Dual y-axes
-  scale_y_continuous(
-    name   = "Total Prize Money (USD)",
-    labels = function(x) paste0("$", x / 1e6, "M"),
-    expand = expansion(mult = c(0, 0.05)),
-    sec.axis = sec_axis(
-      transform = ~ . / scale_factor,
-      name      = "Total Tournaments",
-      labels    = function(x) formatC(x, format = "d", big.mark = ",")
-    )
-  ) +
-  scale_x_continuous(
-    breaks = seq(1998, 2025, by = 3),
-    expand = expansion(add = 0.5)
-  ) +
-
-  theme_minimal(base_size = 13) +
-  
-  labs(
-    title    = "Prize Money & Tournament Volume in Esports",
-    x        = NULL,
-    caption  = "Source: Esports_Stats.csv  |  Prize money in USD"
-  )
-p
-
-# Section 2: Mean vs. Median
-# Author: Junbo Zhao
-
-# Figure 1
-dataTable <- read.csv("Esports_Stats.csv", check.names = FALSE)
-
-mvmLong <- dataTable |>
-  select(year,
-         `Mean Tournament Prize Pool`,
-         `Median Tournament Prize Pool`,
-         `Mean Earnings/Player`,
-         `Median Earnings/Player`) |>
-  pivot_longer(-year, names_to = "metric", values_to = "value") |>
-  mutate(
-    panel  = ifelse(grepl("Tournament", metric),
-                    "Per tournament prize pool",
-                    "Per player earnings"),
-    centerType = ifelse(grepl("^Mean", metric), "Mean", "Median")
-  )
-
-ggplot(mvmLong, aes(x = year, y = value, color = centerType)) +
-  geom_line(linewidth = 0.8) +
-  geom_point(size = 1.6) +
-  facet_wrap(~ panel, scales = "free_y") +
-  scale_y_log10(labels = dollar) +
-  scale_color_manual(values = c("Mean" = "#c0392b", "Median" = "#2c3e50")) +
-  labs(
-    title = "Where the average meets the typical",
-    x = "Year", y = "USD (log scale)", color = NULL
-  ) +
-  theme_minimal(base_size = 11) +
-  theme(legend.position = "top",
-        strip.text = element_text(face = "bold"))
-
-# Figure 2
-dataTable <- read.csv("Esports_Stats.csv", check.names = FALSE)
-
-ratioLong <- dataTable |>
-  transmute(
-    year,
-    `Tournament prize pool` =
-      `Mean Tournament Prize Pool` / `Median Tournament Prize Pool`,
-    `Per-player earnings`   =
-      `Mean Earnings/Player`     / `Median Earnings/Player`
-  ) |>
-  pivot_longer(-year, names_to = "metric", values_to = "ratio")
-
-ggplot(ratioLong, aes(x = year, y = ratio, color = metric)) +
-  geom_hline(yintercept = 1, linetype = "dashed", color = "grey60") +
-  geom_line(linewidth = 0.8) +
-  geom_point(size = 1.6) +
-  scale_color_manual(values = c("Tournament prize pool" = "#3b7a57",
-                                "Per-player earnings"   = "#d68c45")) +
-  labs(
-    title = "How skewed was each year?",
-    x = "Year", y = "Mean / Median", color = NULL
-  ) +
-  theme_minimal(base_size = 11) +
-  theme(legend.position = "top")
-
-# Section 3: The Relationship Between The Number Of Players And The Award Pool Of The Tournament
-# Author: JiXian Li
-
-dataTable <- read.csv("Esports_Stats.csv", check.names = FALSE)
-ggplot(dataTable, aes(x = `Total Active Players`, y = `Total Prize Money`)) +
-  geom_line(color = "skyblue", linewidth = 1) +
-  geom_point(color = "darkblue", size = 2) +
-  scale_x_continuous(labels = comma) +
-  scale_y_continuous(labels = comma) +
-  labs(
-    title = "Relationship Between Total Players and Award Pool Of Tournament",
-    x = "Total Active Players",
-    y = "Total Prize Money Of The Tournament (USD)"
-  )
 ```
 
+```{r}
+#| label: session-info
+#| echo: true
 
-
+sessionInfo()
+```
