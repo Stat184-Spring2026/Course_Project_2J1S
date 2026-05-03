@@ -9,8 +9,8 @@ Stat 184 group project (Spring 2026). We track how the esports industry has scal
 | Name      | Email              | Primary role                     |
 |-----------|--------------------|----------------------------------|
 | Junbo Zhao  | jzz5658@psu.edu    | Scraping, tidying, plots         |
-| Seokyoung Kim  | smk7032@psu.edu    | Supplementary data, tables  
-| Jixian Li  |  jpl6859@psu.edu  | data analyze and organize
+| Seokyoung Kim  | smk7032@psu.edu    | Supplementary data, tables       |
+| JiXianLi  | jpl6859@psu.edu    | data analyze and organize       |
 |-----------|--------------------|----------------------------------|
 
 
