@@ -51,15 +51,12 @@ esports <- read_csv("Esports_Stats.csv", show_col_types = FALSE) |>
 \newpage
 
 # Introduction
-Esports has gone from a few hobbyists at arcade machines in the late 1990s to one of the largest entertainment categories in the world. Total prize money is now in the hundreds of millions of dollars per year, and tens of thousands of players compete in tracked events every season. Even with that scale, there is not much long-form quantitative work that follows the whole arc of the industry from its earliest years.
+E-sports has evolved from a small group of enthusiasts' entertainment into a global industry over the past three decades. At the same time, the number of professional players, the frequency of the competition, and the number of players are continuously increasing, which leads to esports becoming a formal exercise. However, we still lack quantitative research on the long-term growth model of e-sports. For instance, over the past nearly three decades, how has the total prize money of e-sports changed over time? Are there significant differences in the distribution of individual player incomes between different years? And is there a clear correlation between the growth of active players and the total prize money of. In order to answer these questions, this report records the data of e-sports from 1998 to 2025, including total award money, total number of tournaments, mean and median tournament award pool, and mean and median earnings per player. This report's analysis part mainly includes three parts:
 
-This report uses public data from esportsearnings.com covering 1998 to 2025. The dataset has 28 rows (one per year) and eight columns: total prize money, total tournament count, total active players, plus the mean and median of both the per-tournament prize pool and per-player earnings. We picked three questions to dig into:
 
-1. How have total prize money and tournament volume moved over time, and do they grow together?
-2. How big is the gap between mean and median earnings, and what does that gap say about who actually makes money in the scene?
-3. Is there a clean relationship between the number of active players and the total prize money each year?
-
-The three analysis sections answer one question each. The Summary at the end ties them together and looks at what changed after 2022.
+1. The trend of the award pool of the tournaments over the years
+2. The difference between the mean and the median, and what does that difference mean?
+3. the relationship between the number of players and the award pool of the tournament?
 
 \newpage
 
@@ -96,6 +93,8 @@ tibble(
 ) |>
   knitr::kable()
 ```
+
+\newpage
 
 To make the rest of the report easier to follow, we grouped the 28 years into four eras using visible breakpoints in the data. The cutoffs are not arbitrary: total tournament count crossed 1,000 around 2010, hit roughly 6,000 around 2019, and dropped sharply after 2022. @tbl-era-summary summarizes each era.
 
